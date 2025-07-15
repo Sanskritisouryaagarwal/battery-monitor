@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Battery & Network Monitor</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: white;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .card h3 {
+            margin-bottom: 15px;
+            color: #4a5568;
+            font-size: 1.3em;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-left: 10px;
+        }
+
+        .status-good { background: #48bb78; }
+        .status-warning { background: #ed8936; }
+        .status-critical { background: #f56565; }
+
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            padding: 10px;
+            background: rgba(0,0,0,0.05);
+            border-radius: 8px;
+        }
+
+        .metric-value {
+            font-weight: bold;
+            color: #2d3748;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 200px;
+            margin-top: 15px;
+        }
+
+        canvas {
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .suggestions {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .suggestion {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+            padding: 15px;
+            background: rgba(0,0,0,0.05);
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+        }
+
+        .suggestion-icon {
+            font-size: 1.5em;
+            margin-right: 15px;
+        }
+
+        .location-info {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 15px;
+            color: white;
+            text-align: center;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+
+        .error {
+            background: #fed7d7;
+            color: #c53030;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            background: #667eea;
+            color: white;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: background 0.3s;
+        }
+
+        .btn:hover {
+            background: #5a67d8;
+        }
+
+        .btn:disabled {
+            background: #a0aec0;
+            cursor: not-allowed;
+        }
+
+        @media (max-width: 768px) {
+            .dashboard {
+                grid-template-columns: 1fr;
+            }
+            
+            .header h1 {
+                font-size: 2em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⚡ Smart Battery & Network Monitor</h1>
+            <p>Optimize your device's performance with intelligent monitoring</p>
+        </div>
+
+        <div class="controls">
+            <button class="btn" id="startBtn">Start Monitoring</button>
+            <button class="btn" id="stopBtn" disabled>Stop Monitoring</button>
+            <button class="btn" id="locationBtn">Get Location</button>
+            <button class="btn" id="optimizeBtn">Optimize Now</button>
+        </div>
+
+        <div id="error" class="error" style="display: none;"></div>
+
+        <div class="dashboard">
+            <div class="card">
+                <h3>Battery Status <span id="batteryStatus" class="status-indicator"></span></h3>
+                <div class="metric">
+                    <span>Level:</span>
+                    <span id="batteryLevel" class="metric-value">--</span>
+                </div>
+                <div class="metric">
+                    <span>Charging:</span>
+                    <span id="batteryCharging" class="metric-value">--</span>
+                </div>
+                <div class="metric">
+                    <span>Time Remaining:</span>
+                    <span id="batteryTime" class="metric-value">--</span>
+                </div>
+                <div class="chart-container">
+                    <canvas id="batteryChart" width="300" height="180"></canvas>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Network Information <span id="networkStatus" class="status-indicator"></span></h3>
+                <div class="metric">
+                    <span>Connection Type:</span>
+                    <span id="networkType" class="metric-value">--</span>
+                </div>
+                <div class="metric">
+                    <span>Effective Type:</span>
+                    <span id="effectiveType" class="metric-value">--</span>
+                </div>
+                <div class="metric">
+                    <span>Downlink:</span>
+                    <span id="downlink" class="metric-value">--</span>
+                </div>
+                <div class="metric">
+                    <span>RTT:</span>
+                    <span id="rtt" class="metric-value">--</span>
+                </div>
+                <div class="chart-container">
+                    <canvas id="networkChart" width="300" height="180"></canvas>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Location & Context</h3>
+                <div class="metric">
+                    <span>Latitude:</span>
+                    <span id="latitude" class="metric-value">--</span>
+                </div>
+                <div class="metric">
+                    <span>Longitude:</span>
+                    <span id="longitude" class="metric-value">--</span>
+                </div>
+                <div class="metric">
+                    <span>Accuracy:</span>
+                    <span id="accuracy" class="metric-value">--</span>
+                </div>
+                <div class="location-info">
+                    <div id="locationContext">Location context will appear here</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="suggestions">
+            <h3>💡 Smart Suggestions</h3>
+            <div id="suggestionsList">
+                <div class="loading">Analyzing your device... Please start monitoring to see suggestions.</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class SmartMonitor {
+            constructor() {
+                this.isMonitoring = false;
+                this.batteryHistory = [];
+                this.networkHistory = [];
+                this.location = null;
+                this.taskId = null;
+                
+                this.initializeElements();
+                this.setupEventListeners();
+                this.setupIntersectionObserver();
+                this.checkAPISupport();
+            }
+
+            initializeElements() {
+                this.elements = {
+                    startBtn: document.getElementById('startBtn'),
+                    stopBtn: document.getElementById('stopBtn'),
+                    locationBtn: document.getElementById('locationBtn'),
+                    optimizeBtn: document.getElementById('optimizeBtn'),
+                    error: document.getElementById('error'),
+                    batteryLevel: document.getElementById('batteryLevel'),
+                    batteryCharging: document.getElementById('batteryCharging'),
+                    batteryTime: document.getElementById('batteryTime'),
+                    batteryStatus: document.getElementById('batteryStatus'),
+                    networkType: document.getElementById('networkType'),
+                    effectiveType: document.getElementById('effectiveType'),
+                    downlink: document.getElementById('downlink'),
+                    rtt: document.getElementById('rtt'),
+                    networkStatus: document.getElementById('networkStatus'),
+                    latitude: document.getElementById('latitude'),
+                    longitude: document.getElementById('longitude'),
+                    accuracy: document.getElementById('accuracy'),
+                    locationContext: document.getElementById('locationContext'),
+                    suggestionsList: document.getElementById('suggestionsList'),
+                    batteryChart: document.getElementById('batteryChart'),
+                    networkChart: document.getElementById('networkChart')
+                };
+            }
+
+            setupEventListeners() {
+                this.elements.startBtn.addEventListener('click', () => this.startMonitoring());
+                this.elements.stopBtn.addEventListener('click', () => this.stopMonitoring());
+                this.elements.locationBtn.addEventListener('click', () => this.getLocation());
+                this.elements.optimizeBtn.addEventListener('click', () => this.optimizeDevice());
+            }
+
+            setupIntersectionObserver() {
+                // Only update charts when they're visible
+                this.observer = new IntersectionObserver((entries) => {
+                    entries.forEach(entry => {
+                        if (entry.isIntersecting) {
+                            const canvas = entry.target;
+                            if (canvas.id === 'batteryChart') {
+                                this.updateBatteryChart();
+                            } else if (canvas.id === 'networkChart') {
+                                this.updateNetworkChart();
+                            }
+                        }
+                    });
+                }, { threshold: 0.1 });
+
+                this.observer.observe(this.elements.batteryChart);
+                this.observer.observe(this.elements.networkChart);
+            }
+
+            checkAPISupport() {
+                const checks = {
+                    battery: 'getBattery' in navigator,
+                    network: 'connection' in navigator,
+                    geolocation: 'geolocation' in navigator,
+                    backgroundTasks: 'requestIdleCallback' in window,
+                    intersectionObserver: 'IntersectionObserver' in window
+                };
+
+                const unsupported = Object.entries(checks)
+                    .filter(([api, supported]) => !supported)
+                    .map(([api]) => api);
+
+                if (unsupported.length > 0) {
+                    this.showError(`Some APIs are not supported: ${unsupported.join(', ')}`);
+                }
+            }
+
+            async startMonitoring() {
+                this.isMonitoring = true;
+                this.elements.startBtn.disabled = true;
+                this.elements.stopBtn.disabled = false;
+
+                try {
+                    await this.initializeBattery();
+                    this.initializeNetwork();
+                    this.scheduleBackgroundTask();
+                    this.updateSuggestions();
+                } catch (error) {
+                    this.showError('Failed to start monitoring: ' + error.message);
+                }
+            }
+
+            stopMonitoring() {
+                this.isMonitoring = false;
+                this.elements.startBtn.disabled = false;
+                this.elements.stopBtn.disabled = true;
+
+                if (this.taskId) {
+                    cancelIdleCallback(this.taskId);
+                    this.taskId = null;
+                }
+            }
+
+            async initializeBattery() {
+                if ('getBattery' in navigator) {
+                    try {
+                        this.battery = await navigator.getBattery();
+                        this.updateBatteryInfo();
+                        
+                        // Listen for battery events
+                        this.battery.addEventListener('chargingchange', () => this.updateBatteryInfo());
+                        this.battery.addEventListener('levelchange', () => this.updateBatteryInfo());
+                        this.battery.addEventListener('chargingtimechange', () => this.updateBatteryInfo());
+                        this.battery.addEventListener('dischargingtimechange', () => this.updateBatteryInfo());
+                    } catch (error) {
+                        this.showError('Battery API not available');
+                    }
+                } else {
+                    this.showError('Battery API not supported');
+                }
+            }
+
+            initializeNetwork() {
+                if ('connection' in navigator) {
+                    this.connection = navigator.connection;
+                    this.updateNetworkInfo();
+                    
+                    this.connection.addEventListener('change', () => this.updateNetworkInfo());
+                } else {
+                    this.showError('Network Information API not supported');
+                }
+            }
+
+            updateBatteryInfo() {
+                if (!this.battery) return;
+
+                const level = Math.round(this.battery.level * 100);
+                const isCharging = this.battery.charging;
+                const timeRemaining = isCharging ? this.battery.chargingTime : this.battery.dischargingTime;
+
+                this.elements.batteryLevel.textContent = level + '%';
+                this.elements.batteryCharging.textContent = isCharging ? 'Yes' : 'No';
+                this.elements.batteryTime.textContent = timeRemaining === Infinity ? 'Unknown' : this.formatTime(timeRemaining);
+
+                // Update status indicator
+                this.elements.batteryStatus.className = 'status-indicator ' + 
+                    (level > 50 ? 'status-good' : level > 20 ? 'status-warning' : 'status-critical');
+
+                // Store history
+                this.batteryHistory.push({
+                    time: Date.now(),
+                    level: level,
+                    charging: isCharging
+                });
+
+                // Keep only last 50 entries
+                if (this.batteryHistory.length > 50) {
+                    this.batteryHistory.shift();
+                }
+            }
+
+            updateNetworkInfo() {
+                if (!this.connection) return;
+
+                this.elements.networkType.textContent = this.connection.type || 'Unknown';
+                this.elements.effectiveType.textContent = this.connection.effectiveType || 'Unknown';
+                this.elements.downlink.textContent = this.connection.downlink ? this.connection.downlink + ' Mbps' : 'Unknown';
+                this.elements.rtt.textContent = this.connection.rtt ? this.connection.rtt + ' ms' : 'Unknown';
+
+                // Update status indicator
+                const effectiveType = this.connection.effectiveType;
+                this.elements.networkStatus.className = 'status-indicator ' + 
+                    (effectiveType === '4g' ? 'status-good' : 
+                     effectiveType === '3g' ? 'status-warning' : 'status-critical');
+
+                // Store history
+                this.networkHistory.push({
+                    time: Date.now(),
+                    downlink: this.connection.downlink || 0,
+                    rtt: this.connection.rtt || 0,
+                    effectiveType: effectiveType
+                });
+
+                // Keep only last 50 entries
+                if (this.networkHistory.length > 50) {
+                    this.networkHistory.shift();
+                }
+            }
+
+            getLocation() {
+                if (!('geolocation' in navigator)) {
+                    this.showError('Geolocation API not supported');
+                    return;
+                }
+
+                navigator.geolocation.getCurrentPosition(
+                    (position) => this.handleLocationSuccess(position),
+                    (error) => this.handleLocationError(error),
+                    { enableHighAccuracy: true, timeout: 10000 }
+                );
+            }
+
+            handleLocationSuccess(position) {
+                this.location = position;
+                const { latitude, longitude, accuracy } = position.coords;
+
+                this.elements.latitude.textContent = latitude.toFixed(6);
+                this.elements.longitude.textContent = longitude.toFixed(6);
+                this.elements.accuracy.textContent = accuracy + ' meters';
+
+                this.updateLocationContext();
+                this.updateSuggestions();
+            }
+
+            handleLocationError(error) {
+                let errorMessage = 'Location access denied';
+                switch (error.code) {
+                    case error.PERMISSION_DENIED:
+                        errorMessage = 'Location access denied by user';
+                        break;
+                    case error.POSITION_UNAVAILABLE:
+                        errorMessage = 'Location information unavailable';
+                        break;
+                    case error.TIMEOUT:
+                        errorMessage = 'Location request timed out';
+                        break;
+                }
+                this.showError(errorMessage);
+            }
+
+            updateLocationContext() {
+                if (!this.location) return;
+
+                const now = new Date();
+                const hour = now.getHours();
+                const accuracy = this.location.coords.accuracy;
+
+                let context = '';
+                if (hour >= 6 && hour < 12) {
+                    context = '🌅 Morning - Consider enabling power saving mode';
+                } else if (hour >= 12 && hour < 18) {
+                    context = '☀️ Afternoon - High usage period detected';
+                } else if (hour >= 18 && hour < 22) {
+                    context = '🌇 Evening - Optimal time for charging';
+                } else {
+                    context = '🌙 Night - Enable night mode for battery saving';
+                }
+
+                if (accuracy > 100) {
+                    context += ' | Indoor location detected';
+                } else {
+                    context += ' | Outdoor location detected';
+                }
+
+                this.elements.locationContext.textContent = context;
+            }
+
+            scheduleBackgroundTask() {
+                if (!this.isMonitoring) return;
+
+                this.taskId = requestIdleCallback((deadline) => {
+                    // Perform background monitoring tasks
+                    while (deadline.timeRemaining() > 5 && this.isMonitoring) {
+                        this.updateBatteryInfo();
+                        this.updateNetworkInfo();
+                        this.updateSuggestions();
+                        break;
+                    }
+                    
+                    // Schedule next task
+                    setTimeout(() => this.scheduleBackgroundTask(), 2000);
+                });
+            }
+
+            updateBatteryChart() {
+                const canvas = this.elements.batteryChart;
+                const ctx = canvas.getContext('2d');
+                
+                // Clear canvas
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                if (this.batteryHistory.length < 2) return;
+
+                // Draw background
+                ctx.fillStyle = 'rgba(102, 126, 234, 0.1)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                // Draw grid
+                ctx.strokeStyle = 'rgba(102, 126, 234, 0.2)';
+                ctx.lineWidth = 1;
+                for (let i = 0; i <= 4; i++) {
+                    const y = (canvas.height / 4) * i;
+                    ctx.beginPath();
+                    ctx.moveTo(0, y);
+                    ctx.lineTo(canvas.width, y);
+                    ctx.stroke();
+                }
+
+                // Draw battery level line
+                ctx.strokeStyle = '#667eea';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+
+                const maxPoints = Math.min(this.batteryHistory.length, 50);
+                for (let i = 0; i < maxPoints; i++) {
+                    const x = (canvas.width / (maxPoints - 1)) * i;
+                    const y = canvas.height - (this.batteryHistory[i].level / 100) * canvas.height;
+                    
+                    if (i === 0) {
+                        ctx.moveTo(x, y);
+                    } else {
+                        ctx.lineTo(x, y);
+                    }
+                }
+                ctx.stroke();
+
+                // Draw current level
+                const currentLevel = this.batteryHistory[this.batteryHistory.length - 1].level;
+                const currentY = canvas.height - (currentLevel / 100) * canvas.height;
+                ctx.fillStyle = '#667eea';
+                ctx.beginPath();
+                ctx.arc(canvas.width - 10, currentY, 4, 0, 2 * Math.PI);
+                ctx.fill();
+
+                // Draw level text
+                ctx.fillStyle = '#333';
+                ctx.font = '12px Arial';
+                ctx.fillText(currentLevel + '%', canvas.width - 40, currentY - 10);
+            }
+
+            updateNetworkChart() {
+                const canvas = this.elements.networkChart;
+                const ctx = canvas.getContext('2d');
+                
+                // Clear canvas
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                if (this.networkHistory.length < 2) return;
+
+                // Draw background
+                ctx.fillStyle = 'rgba(237, 137, 54, 0.1)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                // Find max values for scaling
+                const maxDownlink = Math.max(...this.networkHistory.map(h => h.downlink));
+                const maxRtt = Math.max(...this.networkHistory.map(h => h.rtt));
+
+                // Draw downlink line
+                ctx.strokeStyle = '#ed8936';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+
+                const maxPoints = Math.min(this.networkHistory.length, 50);
+                for (let i = 0; i < maxPoints; i++) {
+                    const x = (canvas.width / (maxPoints - 1)) * i;
+                    const y = canvas.height - (this.networkHistory[i].downlink / (maxDownlink || 1)) * canvas.height;
+                    
+                    if (i === 0) {
+                        ctx.moveTo(x, y);
+                    } else {
+                        ctx.lineTo(x, y);
+                    }
+                }
+                ctx.stroke();
+
+                // Draw current downlink
+                const currentDownlink = this.networkHistory[this.networkHistory.length - 1].downlink;
+                const currentY = canvas.height - (currentDownlink / (maxDownlink || 1)) * canvas.height;
+                ctx.fillStyle = '#ed8936';
+                ctx.beginPath();
+                ctx.arc(canvas.width - 10, currentY, 4, 0, 2 * Math.PI);
+                ctx.fill();
+
+                // Draw downlink text
+                ctx.fillStyle = '#333';
+                ctx.font = '12px Arial';
+                ctx.fillText(currentDownlink + ' Mbps', canvas.width - 70, currentY - 10);
+            }
+
+            updateSuggestions() {
+                const suggestions = this.generateSuggestions();
+                this.elements.suggestionsList.innerHTML = suggestions.map(suggestion => 
+                    `<div class="suggestion">
+                        <div class="suggestion-icon">${suggestion.icon}</div>
+                        <div>${suggestion.text}</div>
+                    </div>`
+                ).join('');
+            }
+
+            generateSuggestions() {
+                const suggestions = [];
+
+                // Battery suggestions
+                if (this.battery) {
+                    const level = this.battery.level * 100;
+                    if (level < 20 && !this.battery.charging) {
+                        suggestions.push({
+                            icon: '🔋',
+                            text: 'Battery is low! Consider enabling power saving mode and reducing screen brightness.'
+                        });
+                    }
+                    if (level > 80 && this.battery.charging) {
+                        suggestions.push({
+                            icon: '⚡',
+                            text: 'Battery is well charged. You can unplug to preserve battery health.'
+                        });
+                    }
+                }
+
+                // Network suggestions
+                if (this.connection) {
+                    if (this.connection.effectiveType === '2g' || this.connection.effectiveType === 'slow-2g') {
+                        suggestions.push({
+                            icon: '📶',
+                            text: 'Slow network detected. Consider disabling auto-sync and large downloads.'
+                        });
+                    }
+                    if (this.connection.rtt > 1000) {
+                        suggestions.push({
+                            icon: '🐌',
+                            text: 'High latency detected. Avoid real-time applications for better experience.'
+                        });
+                    }
+                }
+
+                // Location-based suggestions
+                if (this.location) {
+                    const accuracy = this.location.coords.accuracy;
+                    if (accuracy > 100) {
+                        suggestions.push({
+                            icon: '🏠',
+                            text: 'Indoor location detected. Consider connecting to WiFi to save battery.'
+                        });
+                    }
+                }
+
+                // Time-based suggestions
+                const hour = new Date().getHours();
+                if (hour >= 22 || hour <= 6) {
+                    suggestions.push({
+                        icon: '🌙',
+                        text: 'Night time detected. Enable dark mode and reduce screen brightness.'
+                    });
+                }
+
+                return suggestions.length > 0 ? suggestions : [{
+                    icon: '✅',
+                    text: 'Your device is running optimally! Keep monitoring for best performance.'
+                }];
+            }
+
+            optimizeDevice() {
+                // Simulate optimization process
+                this.elements.optimizeBtn.disabled = true;
+                this.elements.optimizeBtn.textContent = 'Optimizing...';
+
+                setTimeout(() => {
+                    this.elements.optimizeBtn.disabled = false;
+                    this.elements.optimizeBtn.textContent = 'Optimize Now';
+                    
+                    // Show optimization results
+                    this.elements.suggestionsList.innerHTML = `
+                        <div class="suggestion">
+                            <div class="suggestion-icon">🚀</div>
+                            <div>Device optimization complete! Background processes cleaned, cache cleared, and settings optimized for current conditions.</div>
+                        </div>
+                    `;
+                }, 2000);
+            }
+
+            formatTime(seconds) {
+                if (seconds === Infinity) return 'Unknown';
+                const hours = Math.floor(seconds / 3600);
+                const minutes = Math.floor((seconds % 3600) / 60);
+                return `${hours}h ${minutes}m`;
+            }
+
+            showError(message) {
+                this.elements.error.textContent = message;
+                this.elements.error.style.display = 'block';
+                setTimeout(() => {
+                    this.elements.error.style.display = 'none';
+                }, 5000);
+            }
+        }
+
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', () => {
+            new SmartMonitor();
+        });
+    </script>
+</body>
+</html>
